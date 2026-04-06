@@ -23,12 +23,16 @@ const HARD_RELOAD_INTERVAL = 6 * 60 * 60 * 1000;
 export default function PlayerPage() {
   const [ads, setAds] = useState<Ad[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [fading, setFading] = useState(false);
+  const [nextIndex, setNextIndex] = useState(1);
+  const [activeLayer, setActiveLayer] = useState<"a" | "b">("a");
+  const [transitioning, setTransitioning] = useState(false);
   const [nightMode, setNightMode] = useState(false);
   const [timeSlot, setTimeSlot] = useState<TimeSlot | null>(null);
   const [clock, setClock] = useState("");
   const [online, setOnline] = useState(true);
   const bootTime = useRef(Date.now());
+  const videoRefA = useRef<HTMLVideoElement>(null);
+  const videoRefB = useRef<HTMLVideoElement>(null);
 
   // ---------- Wake Lock (prevent screen sleep) ----------
   useEffect(() => {
@@ -40,27 +44,22 @@ export default function PlayerPage() {
           wakeLock = await navigator.wakeLock.request("screen");
         }
       } catch {
-        // Wake Lock not supported or failed — acceptable on some devices
+        // Wake Lock not supported or failed
       }
     }
 
     requestWakeLock();
-
-    // Re-acquire on visibility change (e.g. after tab switch)
     const handleVisibility = () => {
-      if (document.visibilityState === "visible") {
-        requestWakeLock();
-      }
+      if (document.visibilityState === "visible") requestWakeLock();
     };
     document.addEventListener("visibilitychange", handleVisibility);
-
     return () => {
       document.removeEventListener("visibilitychange", handleVisibility);
       wakeLock?.release();
     };
   }, []);
 
-  // ---------- Hide cursor after idle (kiosk) ----------
+  // ---------- Hide cursor after idle ----------
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
     const hide = () => {
@@ -93,19 +92,37 @@ export default function PlayerPage() {
     };
   }, []);
 
-  // ---------- Load ads + poll for schedule updates ----------
-  const refreshAds = useCallback(() => {
+  // ---------- Fetch schedule from API (with fallback to demo data) ----------
+  const fetchSchedule = useCallback(async () => {
+    try {
+      const res = await fetch("/api/schedule", { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.ads && data.ads.length > 0) {
+          setAds(data.ads);
+          return;
+        }
+      }
+    } catch {
+      // API unavailable — fall through to local fallback
+    }
+    // Fallback: use local demo data + schedule logic
     const filtered = getAdsForCurrentSlot(DEMO_ADS);
     setAds(filtered);
-    setNightMode(isNightMode());
-    setTimeSlot(getCurrentTimeSlot());
   }, []);
 
   useEffect(() => {
-    refreshAds();
-    const poll = setInterval(refreshAds, SCHEDULE_POLL_INTERVAL);
+    fetchSchedule();
+    setNightMode(isNightMode());
+    setTimeSlot(getCurrentTimeSlot());
+
+    const poll = setInterval(() => {
+      fetchSchedule();
+      setNightMode(isNightMode());
+      setTimeSlot(getCurrentTimeSlot());
+    }, SCHEDULE_POLL_INTERVAL);
     return () => clearInterval(poll);
-  }, [refreshAds]);
+  }, [fetchSchedule]);
 
   // ---------- Hard reload watchdog ----------
   useEffect(() => {
@@ -138,15 +155,22 @@ export default function PlayerPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // ---------- Ad rotation ----------
+  // ---------- Seamless ad transition (double-buffer) ----------
   const advance = useCallback(() => {
     if (ads.length <= 1) return;
-    setFading(true);
+
+    const next = (currentIndex + 1) % ads.length;
+    setNextIndex(next);
+
+    // Start crossfade
+    setTransitioning(true);
+
     setTimeout(() => {
-      setCurrentIndex((prev) => (prev + 1) % ads.length);
-      setFading(false);
+      setCurrentIndex(next);
+      setActiveLayer((prev) => (prev === "a" ? "b" : "a"));
+      setTransitioning(false);
     }, TRANSITION_DURATION);
-  }, [ads.length]);
+  }, [ads.length, currentIndex]);
 
   useEffect(() => {
     if (ads.length === 0) return;
@@ -156,9 +180,68 @@ export default function PlayerPage() {
     return () => clearTimeout(timer);
   }, [currentIndex, ads, advance]);
 
+  // ---------- Preload next video ----------
+  useEffect(() => {
+    if (ads.length <= 1) return;
+    const next = (currentIndex + 1) % ads.length;
+    const nextAd = ads[next];
+    if (nextAd?.mediaType === "video" && nextAd.mediaUrl) {
+      // Preload next video into the inactive layer
+      const inactiveRef = activeLayer === "a" ? videoRefB : videoRefA;
+      if (inactiveRef.current) {
+        inactiveRef.current.src = nextAd.mediaUrl;
+        inactiveRef.current.load();
+      }
+    }
+  }, [currentIndex, ads, activeLayer]);
+
   const currentAd = ads[currentIndex];
+  const nextAd = ads[nextIndex] ?? ads[0];
   const bgColor = nightMode ? "bg-zinc-950" : "bg-black";
   const brightness = nightMode ? "brightness-75" : "brightness-100";
+
+  // ---------- Render ad layer ----------
+  function renderAd(ad: Ad | undefined, videoRef: React.RefObject<HTMLVideoElement | null>) {
+    if (!ad) return null;
+
+    if (ad.mediaType === "video" && ad.mediaUrl) {
+      return (
+        <video
+          ref={videoRef}
+          src={ad.mediaUrl}
+          autoPlay
+          muted
+          loop
+          playsInline
+          className="w-full h-full object-cover"
+        />
+      );
+    }
+
+    if (ad.mediaUrl) {
+      return (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={ad.mediaUrl}
+          alt={ad.title}
+          className="w-full h-full object-cover"
+        />
+      );
+    }
+
+    // Placeholder for demo ads without media
+    return (
+      <div className="flex flex-col items-center justify-center w-full h-full bg-gradient-to-br from-blue-900 via-black to-purple-900">
+        <p className="text-6xl font-bold mb-4">{ad.clientName}</p>
+        <p className="text-3xl text-zinc-300">{ad.title}</p>
+        {ad.priority === "premium" && (
+          <span className="mt-6 px-4 py-1 bg-amber-500 text-black rounded-full text-sm font-semibold">
+            PREMIUM
+          </span>
+        )}
+      </div>
+    );
+  }
 
   // ---------- Empty state ----------
   if (ads.length === 0) {
@@ -182,49 +265,36 @@ export default function PlayerPage() {
     );
   }
 
-  // ---------- Main player ----------
+  // ---------- Main player (double-buffered layers) ----------
   return (
     <div
       className={`relative min-h-screen ${bgColor} text-white overflow-hidden ${brightness} select-none`}
     >
-      {/* Full-screen ad display */}
+      {/* Layer A */}
       <div
-        className={`absolute inset-0 flex items-center justify-center transition-opacity duration-1000 ${
-          fading ? "opacity-0" : "opacity-100"
-        }`}
+        className="absolute inset-0 flex items-center justify-center transition-opacity duration-1000"
+        style={{
+          opacity: activeLayer === "a" ? 1 : transitioning ? 0 : 0,
+          zIndex: activeLayer === "a" ? 2 : 1,
+        }}
       >
-        {currentAd?.mediaType === "video" && currentAd.mediaUrl ? (
-          <video
-            src={currentAd.mediaUrl}
-            autoPlay
-            muted
-            loop
-            playsInline
-            className="w-full h-full object-cover"
-          />
-        ) : currentAd?.mediaUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={currentAd.mediaUrl}
-            alt={currentAd.title}
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <div className="flex flex-col items-center justify-center w-full h-full bg-gradient-to-br from-blue-900 via-black to-purple-900">
-            <p className="text-6xl font-bold mb-4">{currentAd?.clientName}</p>
-            <p className="text-3xl text-zinc-300">{currentAd?.title}</p>
-            {currentAd?.priority === "premium" && (
-              <span className="mt-6 px-4 py-1 bg-amber-500 text-black rounded-full text-sm font-semibold">
-                PREMIUM
-              </span>
-            )}
-          </div>
-        )}
+        {renderAd(activeLayer === "a" ? currentAd : nextAd, videoRefA)}
+      </div>
+
+      {/* Layer B */}
+      <div
+        className="absolute inset-0 flex items-center justify-center transition-opacity duration-1000"
+        style={{
+          opacity: activeLayer === "b" ? 1 : transitioning ? 0 : 0,
+          zIndex: activeLayer === "b" ? 2 : 1,
+        }}
+      >
+        {renderAd(activeLayer === "b" ? currentAd : nextAd, videoRefB)}
       </div>
 
       {/* QR Code overlay */}
       {currentAd?.qrCodeUrl && (
-        <div className="absolute bottom-8 right-8 bg-white p-3 rounded-xl shadow-2xl">
+        <div className="absolute bottom-8 right-8 bg-white p-3 rounded-xl shadow-2xl z-10">
           <div className="w-24 h-24 bg-zinc-200 flex items-center justify-center text-zinc-500 text-xs">
             QR
           </div>
@@ -233,7 +303,7 @@ export default function PlayerPage() {
       )}
 
       {/* Bottom info bar */}
-      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6">
+      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6 z-10">
         <div className="flex items-end justify-between">
           <div>
             <p className="text-sm text-zinc-400">{timeSlot?.label ?? ""}</p>
@@ -251,15 +321,16 @@ export default function PlayerPage() {
 
       {/* Offline indicator */}
       {!online && (
-        <div className="absolute top-4 left-4 px-3 py-1 bg-amber-600 rounded text-xs font-semibold animate-pulse">
+        <div className="absolute top-4 left-4 px-3 py-1 bg-amber-600 rounded text-xs font-semibold animate-pulse z-10">
           OFFLINE
         </div>
       )}
 
       {/* Progress bar */}
-      <div className="absolute top-0 left-0 right-0 h-1 bg-zinc-800">
+      <div className="absolute top-0 left-0 right-0 h-1 bg-zinc-800 z-10">
         <div
-          className="h-full bg-blue-500 transition-all ease-linear"
+          key={currentIndex}
+          className="h-full bg-blue-500"
           style={{
             animation: `progress ${
               currentAd?.durationSeconds ?? DEFAULT_AD_DURATION
