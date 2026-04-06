@@ -54,3 +54,28 @@ export interface PricingTier {
 }
 
 export type DayPeriod = "morning" | "midday" | "evening" | "night";
+
+export type BookingStatus = "pending_payment" | "pending_review" | "approved" | "live" | "completed" | "rejected";
+export type DurationUnit = "days" | "weeks" | "months";
+
+export interface Booking {
+  id: string;
+  businessName: string;
+  contactName: string;
+  contactEmail: string;
+  contactPhone: string;
+  timeSlotId: string;
+  durationValue: number;
+  durationUnit: DurationUnit;
+  startDate: string;
+  adVideoUrl?: string;
+  requestAdCreation: boolean;
+  adNotes?: string;
+  pricingTier: string;
+  totalPrice: number;
+  stripeSessionId?: string;
+  stripePaymentIntentId?: string;
+  status: BookingStatus;
+  createdAt: string;
+  updatedAt: string;
+}

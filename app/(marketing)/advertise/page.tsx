@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { PRICING_TIERS, LOCATION } from "@/lib/constants";
 
 export default function AdvertisePage() {
@@ -7,12 +8,12 @@ export default function AdvertisePage() {
         <h1 className="text-xl font-bold tracking-tight">
           Mission Beach Billboard TV
         </h1>
-        <a
-          href="mailto:julian@aiacrobatics.com?subject=Billboard%20TV%20Advertising"
+        <Link
+          href="/advertise/book"
           className="rounded-lg bg-white text-black px-4 py-2 text-sm font-medium hover:bg-zinc-200 transition-colors"
         >
-          Contact Us
-        </a>
+          Book Now
+        </Link>
       </header>
 
       {/* Hero */}
@@ -107,16 +108,16 @@ export default function AdvertisePage() {
                   </li>
                 ))}
               </ul>
-              <a
-                href={`mailto:julian@aiacrobatics.com?subject=Billboard%20TV%20-%20${encodeURIComponent(tier.name)}%20Plan`}
+              <Link
+                href="/advertise/book"
                 className={`mt-6 block text-center rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${
                   tier.popular
                     ? "bg-blue-600 hover:bg-blue-500 text-white"
                     : "bg-zinc-800 hover:bg-zinc-700 text-zinc-200"
                 }`}
               >
-                Get Started
-              </a>
+                Book Now
+              </Link>
             </div>
           ))}
         </div>
@@ -129,12 +130,12 @@ export default function AdvertisePage() {
           Contact us to reserve your ad slot and start reaching thousands of
           beachgoers today.
         </p>
-        <a
-          href="mailto:julian@aiacrobatics.com?subject=Billboard%20TV%20Advertising"
+        <Link
+          href="/advertise/book"
           className="inline-block rounded-lg bg-white text-black px-8 py-3 font-medium hover:bg-zinc-200 transition-colors"
         >
-          Get in Touch
-        </a>
+          Book Your Ad Slot
+        </Link>
       </section>
 
       <footer className="border-t border-zinc-800 px-6 py-4 text-center text-sm text-zinc-500">

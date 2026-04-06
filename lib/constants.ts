@@ -82,3 +82,23 @@ export type AdDuration = (typeof AD_DURATIONS)[number];
 
 export const DEFAULT_AD_DURATION = 15; // seconds per ad
 export const TRANSITION_DURATION = 1000; // ms fade transition
+
+/** Multipliers for converting weekly price to other durations */
+export const DURATION_MULTIPLIERS: Record<string, Record<string, number>> = {
+  days: { multiplier: 1 / 7, min: 1 },
+  weeks: { multiplier: 1, min: 1 },
+  months: { multiplier: 4, min: 1 },
+};
+
+export function calculatePrice(
+  tierName: string,
+  durationValue: number,
+  durationUnit: string
+): number {
+  const tier = PRICING_TIERS.find((t) => t.name === tierName);
+  if (!tier) return 0;
+  const weeklyPrice = tier.price;
+  const mult = DURATION_MULTIPLIERS[durationUnit];
+  if (!mult) return 0;
+  return Math.round(weeklyPrice * (mult.multiplier as number) * durationValue);
+}
