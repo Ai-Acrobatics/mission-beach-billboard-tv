@@ -1,0 +1,61 @@
+import type { Ad } from "./types";
+
+/**
+ * Demo ads for development. Replace with Supabase queries in production.
+ */
+export const DEMO_ADS: Ad[] = [
+  {
+    id: "demo-1",
+    clientId: "client-1",
+    clientName: "Belmont Park",
+    title: "Belmont Park — Summer Fun Awaits",
+    mediaUrl: "",
+    mediaType: "image",
+    durationSeconds: 15,
+    active: true,
+    priority: "premium",
+    qrCodeUrl: "https://www.belmontpark.com",
+    createdAt: "2026-04-01",
+    updatedAt: "2026-04-01",
+  },
+  {
+    id: "demo-2",
+    clientId: "client-2",
+    clientName: "Mission Beach Surf Shop",
+    title: "Board Rentals from $25/day",
+    mediaUrl: "",
+    mediaType: "image",
+    durationSeconds: 15,
+    active: true,
+    priority: "standard",
+    createdAt: "2026-04-01",
+    updatedAt: "2026-04-01",
+  },
+  {
+    id: "demo-3",
+    clientId: "client-3",
+    clientName: "Pacific Beach Fish Shop",
+    title: "Fresh Catch Daily — Fish Tacos $12",
+    mediaUrl: "",
+    mediaType: "image",
+    durationSeconds: 15,
+    active: true,
+    priority: "standard",
+    createdAt: "2026-04-01",
+    updatedAt: "2026-04-01",
+  },
+  {
+    id: "demo-4",
+    clientId: "client-4",
+    clientName: "SD Bay Adventures",
+    title: "Jet Ski & Kayak Rentals",
+    mediaUrl: "",
+    mediaType: "video",
+    durationSeconds: 30,
+    active: true,
+    priority: "premium",
+    qrCodeUrl: "https://sdbay.com",
+    createdAt: "2026-04-01",
+    updatedAt: "2026-04-01",
+  },
+];
