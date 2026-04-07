@@ -6,6 +6,21 @@ import { getCurrentTimeSlot, getAdsForCurrentSlot, isNightMode } from "@/lib/sch
 import { DEFAULT_AD_DURATION, TRANSITION_DURATION, SITE_NAME } from "@/lib/constants";
 import type { Ad, TimeSlot } from "@/lib/types";
 
+function logImpression(ad: Ad, timeSlot: TimeSlot | null) {
+  fetch("/api/impressions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      adId: ad.id,
+      durationSeconds: ad.durationSeconds,
+      timeSlotId: timeSlot?.id ?? null,
+      dayOfWeek: new Date().getDay(),
+    }),
+  }).catch(() => {
+    // Never break the player
+  });
+}
+
 async function loadAds(): Promise<Ad[]> {
   try {
     const res = await fetch("/api/ads", { cache: "no-store" });
@@ -65,6 +80,12 @@ export default function PlayerPage() {
       setFading(false);
     }, TRANSITION_DURATION);
   }, [ads.length]);
+
+  // Log impression each time a new ad is displayed
+  useEffect(() => {
+    if (ads.length === 0) return;
+    logImpression(ads[currentIndex], timeSlot);
+  }, [currentIndex, ads, timeSlot]);
 
   useEffect(() => {
     if (ads.length === 0) return;
