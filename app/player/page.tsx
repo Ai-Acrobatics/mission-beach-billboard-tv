@@ -6,6 +6,31 @@ import { getCurrentTimeSlot, getAdsForCurrentSlot, isNightMode } from "@/lib/sch
 import { DEFAULT_AD_DURATION, TRANSITION_DURATION, SITE_NAME } from "@/lib/constants";
 import type { Ad, TimeSlot } from "@/lib/types";
 
+function logImpression(ad: Ad, timeSlot: TimeSlot | null) {
+  fetch("/api/impressions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      adId: ad.id,
+      durationSeconds: ad.durationSeconds,
+      timeSlotId: timeSlot?.id ?? null,
+      dayOfWeek: new Date().getDay(),
+    }),
+  }).catch(() => {
+    // Never break the player
+  });
+}
+
+async function loadAds(): Promise<Ad[]> {
+  try {
+    const res = await fetch("/api/ads", { cache: "no-store" });
+    if (res.ok) return res.json();
+  } catch {
+    // Silently fall back to demo data
+  }
+  return DEMO_ADS;
+}
+
 export default function PlayerPage() {
   const [ads, setAds] = useState<Ad[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -14,10 +39,12 @@ export default function PlayerPage() {
   const [timeSlot, setTimeSlot] = useState<TimeSlot | null>(null);
   const [clock, setClock] = useState("");
 
-  // Load ads
+  // Load ads from API (falls back to demo data)
   useEffect(() => {
-    const filtered = getAdsForCurrentSlot(DEMO_ADS);
-    setAds(filtered);
+    loadAds().then((allAds) => {
+      const filtered = getAdsForCurrentSlot(allAds);
+      setAds(filtered);
+    });
     setNightMode(isNightMode());
     setTimeSlot(getCurrentTimeSlot());
   }, []);
@@ -53,6 +80,12 @@ export default function PlayerPage() {
       setFading(false);
     }, TRANSITION_DURATION);
   }, [ads.length]);
+
+  // Log impression each time a new ad is displayed
+  useEffect(() => {
+    if (ads.length === 0) return;
+    logImpression(ads[currentIndex], timeSlot);
+  }, [currentIndex, ads, timeSlot]);
 
   useEffect(() => {
     if (ads.length === 0) return;
@@ -120,10 +153,15 @@ export default function PlayerPage() {
       {/* QR Code overlay */}
       {currentAd?.qrCodeUrl && (
         <div className="absolute bottom-8 right-8 bg-white p-3 rounded-xl shadow-2xl">
-          <div className="w-24 h-24 bg-zinc-200 flex items-center justify-center text-zinc-500 text-xs">
-            QR
-          </div>
-          <p className="text-black text-xs text-center mt-1">Scan me</p>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`/api/qr/${currentAd.id}/image`}
+            alt="Scan QR code"
+            width={120}
+            height={120}
+            className="w-[120px] h-[120px]"
+          />
+          <p className="text-black text-xs text-center mt-1 font-medium">Scan me</p>
         </div>
       )}
 
