@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { DEMO_ADS } from "@/lib/demo-data";
-import { TIME_SLOTS } from "@/lib/constants";
 import type { Ad } from "@/lib/types";
+import ScheduleBuilder from "@/components/ScheduleBuilder";
 
 function StatusBadge({ active }: { active: boolean }) {
   return (
@@ -137,35 +137,7 @@ export default function AdminPage() {
 
         {/* Schedule Tab */}
         {activeTab === "schedule" && (
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold">Daily Schedule</h2>
-            <div className="grid gap-4 md:grid-cols-2">
-              {TIME_SLOTS.map((slot) => {
-                const slotAds = ads.filter((a) => a.active);
-                return (
-                  <div key={slot.id} className="rounded-xl border border-zinc-800 p-5">
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="font-medium">{slot.label}</h3>
-                      <span className="text-xs text-zinc-500">
-                        {slotAds.length} ads
-                      </span>
-                    </div>
-                    <div className="space-y-2">
-                      {slotAds.map((ad) => (
-                        <div
-                          key={ad.id}
-                          className="flex items-center justify-between bg-zinc-900 rounded-lg px-3 py-2"
-                        >
-                          <span className="text-sm">{ad.title}</span>
-                          <span className="text-xs text-zinc-500">{ad.durationSeconds}s</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          <ScheduleBuilder ads={ads} />
         )}
 
         {/* Clients Tab */}
