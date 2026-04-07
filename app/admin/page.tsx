@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { Ad } from "@/lib/types";
+import ScheduleBuilder from "@/components/ScheduleBuilder";
 
 // ─── Auth Gate ───────────────────────────────────────────────
 function LoginScreen({ onLogin }: { onLogin: () => void }) {
@@ -817,12 +818,7 @@ export default function AdminPage() {
 
         {/* Schedule Tab */}
         {activeTab === "schedule" && (
-          <div className="text-center py-12 text-zinc-500">
-            <p>Schedule management coming soon</p>
-            <p className="text-sm mt-1 text-zinc-600">
-              Assign ads to time slots and configure rotation
-            </p>
-          </div>
+          <ScheduleBuilder ads={ads} />
         )}
 
         {/* Clients Tab */}

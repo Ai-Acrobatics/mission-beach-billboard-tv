@@ -1,13 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase";
+import { verifyAdmin } from "@/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
 /**
  * GET /api/schedule/assignments
- * Returns all schedule assignments.
+ * Returns all schedule assignments. Requires admin auth.
  */
 export async function GET() {
+  const isAdmin = await verifyAdmin();
+  if (!isAdmin) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const { data, error } = await getSupabase()
       .from("schedule_assignments")
@@ -32,6 +38,11 @@ export async function GET() {
  * Body: { adId, timeSlotId, dayOfWeek, startDate?, endDate? }
  */
 export async function POST(req: NextRequest) {
+  const isAdmin = await verifyAdmin();
+  if (!isAdmin) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const body = await req.json();
     const { adId, timeSlotId, dayOfWeek, startDate, endDate } = body;
@@ -101,6 +112,11 @@ export async function POST(req: NextRequest) {
  * Body: { timeSlotId, dayOfWeek }
  */
 export async function DELETE(req: NextRequest) {
+  const isAdmin = await verifyAdmin();
+  if (!isAdmin) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const body = await req.json();
     const { timeSlotId, dayOfWeek } = body;

@@ -38,3 +38,21 @@ CREATE POLICY IF NOT EXISTS "Service role upload for ads"
 CREATE POLICY IF NOT EXISTS "Service role delete for ads"
   ON storage.objects FOR DELETE
   USING (bucket_id = 'ads');
+
+-- 3. Schedule assignments table (daypart scheduling)
+CREATE TABLE IF NOT EXISTS schedule_assignments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  ad_id UUID NOT NULL REFERENCES ads(id) ON DELETE CASCADE,
+  time_slot_id TEXT NOT NULL,  -- 'morning', 'midday', 'evening', 'night'
+  day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),  -- 0=Sun, 6=Sat
+  active BOOLEAN NOT NULL DEFAULT true,
+  start_date DATE,
+  end_date DATE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(time_slot_id, day_of_week)  -- one ad per slot per day
+);
+
+-- Index for player schedule lookups
+CREATE INDEX IF NOT EXISTS idx_schedule_slot_day
+  ON schedule_assignments (time_slot_id, day_of_week, active);
