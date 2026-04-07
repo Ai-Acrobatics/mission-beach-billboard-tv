@@ -42,7 +42,10 @@ export interface Client {
   email: string;
   phone: string;
   businessName: string;
+  notes: string;
+  active: boolean;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface PricingTier {

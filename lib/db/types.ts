@@ -10,6 +10,7 @@ export interface DbClient {
   email: string | null;
   phone: string | null;
   notes: string | null;
+  active: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -87,7 +88,7 @@ export type Database = {
     Tables: {
       clients: {
         Row: DbClient;
-        Insert: Partial<DbClient> & Pick<DbClient, "name" | "business_name">;
+        Insert: Partial<DbClient> & Pick<DbClient, "name" | "business_name"> & { active?: boolean };
         Update: Partial<DbClient>;
         Relationships: [];
       };
