@@ -6,6 +6,16 @@ import { getCurrentTimeSlot, getAdsForCurrentSlot, isNightMode } from "@/lib/sch
 import { DEFAULT_AD_DURATION, TRANSITION_DURATION, SITE_NAME } from "@/lib/constants";
 import type { Ad, TimeSlot } from "@/lib/types";
 
+async function loadAds(): Promise<Ad[]> {
+  try {
+    const res = await fetch("/api/ads", { cache: "no-store" });
+    if (res.ok) return res.json();
+  } catch {
+    // Silently fall back to demo data
+  }
+  return DEMO_ADS;
+}
+
 export default function PlayerPage() {
   const [ads, setAds] = useState<Ad[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -14,10 +24,12 @@ export default function PlayerPage() {
   const [timeSlot, setTimeSlot] = useState<TimeSlot | null>(null);
   const [clock, setClock] = useState("");
 
-  // Load ads
+  // Load ads from API (falls back to demo data)
   useEffect(() => {
-    const filtered = getAdsForCurrentSlot(DEMO_ADS);
-    setAds(filtered);
+    loadAds().then((allAds) => {
+      const filtered = getAdsForCurrentSlot(allAds);
+      setAds(filtered);
+    });
     setNightMode(isNightMode());
     setTimeSlot(getCurrentTimeSlot());
   }, []);

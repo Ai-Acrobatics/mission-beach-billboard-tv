@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DEMO_ADS } from "@/lib/demo-data";
 import { TIME_SLOTS } from "@/lib/constants";
 import type { Ad } from "@/lib/types";
@@ -32,7 +32,14 @@ function PriorityBadge({ priority }: { priority: Ad["priority"] }) {
 }
 
 export default function AdminPage() {
-  const [ads] = useState<Ad[]>(DEMO_ADS);
+  const [ads, setAds] = useState<Ad[]>(DEMO_ADS);
+
+  useEffect(() => {
+    fetch("/api/ads?all=true")
+      .then((r) => (r.ok ? r.json() : DEMO_ADS))
+      .then(setAds)
+      .catch(() => setAds(DEMO_ADS));
+  }, []);
   const [activeTab, setActiveTab] = useState<"ads" | "schedule" | "clients">("ads");
 
   const activeCount = ads.filter((a) => a.active).length;
