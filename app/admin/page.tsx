@@ -7,7 +7,8 @@ import type { Ad } from "@/lib/types";
 
 interface ImpressionStats {
   total: number;
-  byAd: { adId: string; title: string; clientName: string; plays: number; totalSeconds: number }[];
+  totalScans: number;
+  byAd: { adId: string; title: string; clientName: string; plays: number; totalSeconds: number; scans: number }[];
   byDay: { date: string; count: number }[];
   byClient: { clientName: string; plays: number; totalSeconds: number }[];
 }
@@ -107,7 +108,7 @@ function AnalyticsTab() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
         <div className="rounded-xl border border-zinc-800 p-5">
           <p className="text-sm text-zinc-400">Total Impressions</p>
           <p className="mt-1 text-3xl font-bold">{stats.total.toLocaleString()}</p>
@@ -122,6 +123,11 @@ function AnalyticsTab() {
           <p className="text-sm text-zinc-400">Avg/Day</p>
           <p className="mt-1 text-3xl font-bold">{Math.round(stats.total / range).toLocaleString()}</p>
           <p className="text-xs text-zinc-500 mt-1">impressions per day</p>
+        </div>
+        <div className="rounded-xl border border-zinc-800 p-5">
+          <p className="text-sm text-zinc-400">QR Scans</p>
+          <p className="mt-1 text-3xl font-bold">{(stats.totalScans ?? 0).toLocaleString()}</p>
+          <p className="text-xs text-zinc-500 mt-1">last {range} days</p>
         </div>
       </div>
 
@@ -148,6 +154,7 @@ function AnalyticsTab() {
               <th className="text-left px-4 py-2 font-medium">Client</th>
               <th className="text-right px-4 py-2 font-medium">Plays</th>
               <th className="text-right px-4 py-2 font-medium">Airtime</th>
+              <th className="text-right px-4 py-2 font-medium">QR Scans</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-800">
@@ -157,6 +164,7 @@ function AnalyticsTab() {
                 <td className="px-4 py-3 text-zinc-400">{row.clientName}</td>
                 <td className="px-4 py-3 text-right">{row.plays.toLocaleString()}</td>
                 <td className="px-4 py-3 text-right text-zinc-400">{(row.totalSeconds / 60).toFixed(1)}m</td>
+                <td className="px-4 py-3 text-right">{row.scans > 0 ? row.scans.toLocaleString() : "—"}</td>
               </tr>
             ))}
           </tbody>
@@ -278,6 +286,7 @@ export default function AdminPage() {
                     <th className="text-left px-4 py-3 font-medium">Type</th>
                     <th className="text-left px-4 py-3 font-medium">Duration</th>
                     <th className="text-left px-4 py-3 font-medium">Priority</th>
+                    <th className="text-left px-4 py-3 font-medium">QR</th>
                     <th className="text-left px-4 py-3 font-medium">Status</th>
                   </tr>
                 </thead>
@@ -290,6 +299,16 @@ export default function AdminPage() {
                       <td className="px-4 py-3 text-zinc-400">{ad.durationSeconds}s</td>
                       <td className="px-4 py-3">
                         <PriorityBadge priority={ad.priority} />
+                      </td>
+                      <td className="px-4 py-3">
+                        {ad.qrCodeUrl ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-400">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                            Active
+                          </span>
+                        ) : (
+                          <span className="text-xs text-zinc-600">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <StatusBadge active={ad.active} />

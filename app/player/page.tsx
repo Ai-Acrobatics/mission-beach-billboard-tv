@@ -153,10 +153,15 @@ export default function PlayerPage() {
       {/* QR Code overlay */}
       {currentAd?.qrCodeUrl && (
         <div className="absolute bottom-8 right-8 bg-white p-3 rounded-xl shadow-2xl">
-          <div className="w-24 h-24 bg-zinc-200 flex items-center justify-center text-zinc-500 text-xs">
-            QR
-          </div>
-          <p className="text-black text-xs text-center mt-1">Scan me</p>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`/api/qr/${currentAd.id}/image`}
+            alt="Scan QR code"
+            width={120}
+            height={120}
+            className="w-[120px] h-[120px]"
+          />
+          <p className="text-black text-xs text-center mt-1 font-medium">Scan me</p>
         </div>
       )}
 

@@ -74,6 +74,14 @@ export interface DbImpression {
   day_of_week: number | null;
 }
 
+export interface DbQrScan {
+  id: string;
+  ad_id: string;
+  scanned_at: string;
+  user_agent: string | null;
+  ip_address: string | null;
+}
+
 export type Database = {
   public: {
     Tables: {
@@ -105,6 +113,12 @@ export type Database = {
         Row: DbImpression;
         Insert: Partial<DbImpression> & Pick<DbImpression, "ad_id" | "duration_seconds">;
         Update: Partial<DbImpression>;
+        Relationships: [];
+      };
+      qr_scans: {
+        Row: DbQrScan;
+        Insert: Partial<DbQrScan> & Pick<DbQrScan, "ad_id">;
+        Update: Partial<DbQrScan>;
         Relationships: [];
       };
     };

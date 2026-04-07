@@ -75,9 +75,28 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Fetch QR scan counts per ad for the same period
+  const { data: scans } = await supabase
+    .from("qr_scans")
+    .select("ad_id, scanned_at")
+    .gte("scanned_at", sinceISO);
+
+  const scansByAd = new Map<string, number>();
+  let totalScans = 0;
+  for (const scan of scans ?? []) {
+    scansByAd.set(scan.ad_id, (scansByAd.get(scan.ad_id) ?? 0) + 1);
+    totalScans++;
+  }
+
+  // Attach scan counts to per-ad stats
+  const byAdWithScans = Array.from(adCounts.values())
+    .map((row) => ({ ...row, scans: scansByAd.get(row.adId) ?? 0 }))
+    .sort((a, b) => b.plays - a.plays);
+
   return NextResponse.json({
     total: (impressions ?? []).length,
-    byAd: Array.from(adCounts.values()).sort((a, b) => b.plays - a.plays),
+    totalScans,
+    byAd: byAdWithScans,
     byDay: Array.from(dayCounts.entries())
       .map(([date, count]) => ({ date, count }))
       .sort((a, b) => a.date.localeCompare(b.date)),

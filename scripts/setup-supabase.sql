@@ -159,3 +159,22 @@ CREATE POLICY "Public read on ads"
 -- Public read on schedule_assignments (player needs this)
 CREATE POLICY "Public read on schedule_assignments"
   ON schedule_assignments FOR SELECT USING (true);
+
+-- ============================================================
+-- 8. QR_SCANS table (QR code scan tracking)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS qr_scans (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  ad_id UUID NOT NULL REFERENCES ads(id) ON DELETE CASCADE,
+  scanned_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  user_agent TEXT,
+  ip_address TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_qr_scans_ad ON qr_scans (ad_id, scanned_at DESC);
+CREATE INDEX IF NOT EXISTS idx_qr_scans_date ON qr_scans (scanned_at DESC);
+
+ALTER TABLE qr_scans ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Service role full access on qr_scans"
+  ON qr_scans FOR ALL USING (true) WITH CHECK (true);
