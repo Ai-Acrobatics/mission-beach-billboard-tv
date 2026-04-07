@@ -82,3 +82,12 @@ export type AdDuration = (typeof AD_DURATIONS)[number];
 
 export const DEFAULT_AD_DURATION = 15; // seconds per ad
 export const TRANSITION_DURATION = 1000; // ms fade transition
+
+// YouTube Live streaming
+export const YOUTUBE_LIVE_EMBED_URL =
+  process.env.NEXT_PUBLIC_YOUTUBE_LIVE_EMBED_URL || "";
+export const YOUTUBE_LIVE_WATCH_URL =
+  process.env.NEXT_PUBLIC_YOUTUBE_LIVE_WATCH_URL || "";
+export const YOUTUBE_STREAM_KEY = process.env.YOUTUBE_STREAM_KEY || "";
+export const YOUTUBE_RTMP_URL =
+  process.env.YOUTUBE_RTMP_URL || "rtmp://a.rtmp.youtube.com/live2";

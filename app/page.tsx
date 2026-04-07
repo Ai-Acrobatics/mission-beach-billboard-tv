@@ -31,6 +31,12 @@ export default function Home() {
             >
               Open Player
             </Link>
+            <Link
+              href="/advertise"
+              className="rounded-lg border border-zinc-700 px-6 py-3 font-medium hover:bg-zinc-900 transition-colors"
+            >
+              Advertise
+            </Link>
           </div>
         </div>
       </main>

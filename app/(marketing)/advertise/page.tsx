@@ -1,4 +1,5 @@
-import { PRICING_TIERS, LOCATION } from "@/lib/constants";
+import { PRICING_TIERS, LOCATION, YOUTUBE_LIVE_EMBED_URL } from "@/lib/constants";
+import { LiveStreamEmbed } from "./LiveStreamEmbed";
 
 export default function AdvertisePage() {
   return (
@@ -25,6 +26,9 @@ export default function AdvertisePage() {
           our digital billboard TVs at {LOCATION}.
         </p>
       </section>
+
+      {/* Live Stream */}
+      <LiveStreamEmbed embedUrl={YOUTUBE_LIVE_EMBED_URL} />
 
       {/* Stats */}
       <section className="border-y border-zinc-800 py-12">
