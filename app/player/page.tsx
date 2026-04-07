@@ -1,28 +1,140 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { DEMO_ADS } from "@/lib/demo-data";
-import { getCurrentTimeSlot, getAdsForCurrentSlot, isNightMode } from "@/lib/schedule";
-import { DEFAULT_AD_DURATION, TRANSITION_DURATION, SITE_NAME } from "@/lib/constants";
+import {
+  getCurrentTimeSlot,
+  getAdsForCurrentSlot,
+  isNightMode,
+} from "@/lib/schedule";
+import {
+  DEFAULT_AD_DURATION,
+  TRANSITION_DURATION,
+  SITE_NAME,
+} from "@/lib/constants";
 import type { Ad, TimeSlot } from "@/lib/types";
+
+/** How often to re-fetch ad schedule from server (ms) */
+const SCHEDULE_POLL_INTERVAL = 5 * 60 * 1000; // 5 minutes
+
+/** Force a full page reload every 6 hours to clear memory leaks */
+const HARD_RELOAD_INTERVAL = 6 * 60 * 60 * 1000;
 
 export default function PlayerPage() {
   const [ads, setAds] = useState<Ad[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [fading, setFading] = useState(false);
+  const [nextIndex, setNextIndex] = useState(1);
+  const [activeLayer, setActiveLayer] = useState<"a" | "b">("a");
+  const [transitioning, setTransitioning] = useState(false);
   const [nightMode, setNightMode] = useState(false);
   const [timeSlot, setTimeSlot] = useState<TimeSlot | null>(null);
   const [clock, setClock] = useState("");
+  const [online, setOnline] = useState(true);
+  const bootTime = useRef(Date.now());
+  const videoRefA = useRef<HTMLVideoElement>(null);
+  const videoRefB = useRef<HTMLVideoElement>(null);
 
-  // Load ads
+  // ---------- Wake Lock (prevent screen sleep) ----------
   useEffect(() => {
-    const filtered = getAdsForCurrentSlot(DEMO_ADS);
-    setAds(filtered);
-    setNightMode(isNightMode());
-    setTimeSlot(getCurrentTimeSlot());
+    let wakeLock: WakeLockSentinel | null = null;
+
+    async function requestWakeLock() {
+      try {
+        if ("wakeLock" in navigator) {
+          wakeLock = await navigator.wakeLock.request("screen");
+        }
+      } catch {
+        // Wake Lock not supported or failed
+      }
+    }
+
+    requestWakeLock();
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") requestWakeLock();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      wakeLock?.release();
+    };
   }, []);
 
-  // Update clock every second
+  // ---------- Hide cursor after idle ----------
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const hide = () => {
+      document.body.style.cursor = "none";
+    };
+    const show = () => {
+      document.body.style.cursor = "default";
+      clearTimeout(timer);
+      timer = setTimeout(hide, 3000);
+    };
+    document.addEventListener("mousemove", show);
+    timer = setTimeout(hide, 3000);
+    return () => {
+      document.removeEventListener("mousemove", show);
+      clearTimeout(timer);
+      document.body.style.cursor = "default";
+    };
+  }, []);
+
+  // ---------- Online / Offline detection ----------
+  useEffect(() => {
+    const goOnline = () => setOnline(true);
+    const goOffline = () => setOnline(false);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    setOnline(navigator.onLine);
+    return () => {
+      window.removeEventListener("online", goOnline);
+      window.removeEventListener("offline", goOffline);
+    };
+  }, []);
+
+  // ---------- Fetch schedule from API (with fallback to demo data) ----------
+  const fetchSchedule = useCallback(async () => {
+    try {
+      const res = await fetch("/api/schedule", { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.ads && data.ads.length > 0) {
+          setAds(data.ads);
+          return;
+        }
+      }
+    } catch {
+      // API unavailable — fall through to local fallback
+    }
+    // Fallback: use local demo data + schedule logic
+    const filtered = getAdsForCurrentSlot(DEMO_ADS);
+    setAds(filtered);
+  }, []);
+
+  useEffect(() => {
+    fetchSchedule();
+    setNightMode(isNightMode());
+    setTimeSlot(getCurrentTimeSlot());
+
+    const poll = setInterval(() => {
+      fetchSchedule();
+      setNightMode(isNightMode());
+      setTimeSlot(getCurrentTimeSlot());
+    }, SCHEDULE_POLL_INTERVAL);
+    return () => clearInterval(poll);
+  }, [fetchSchedule]);
+
+  // ---------- Hard reload watchdog ----------
+  useEffect(() => {
+    const check = setInterval(() => {
+      if (Date.now() - bootTime.current > HARD_RELOAD_INTERVAL) {
+        window.location.reload();
+      }
+    }, 60_000);
+    return () => clearInterval(check);
+  }, []);
+
+  // ---------- Clock ----------
   useEffect(() => {
     const tick = () => {
       const now = new Date();
@@ -33,7 +145,6 @@ export default function PlayerPage() {
           hour12: true,
         })
       );
-      // Check night mode every minute
       if (now.getSeconds() === 0) {
         setNightMode(isNightMode());
         setTimeSlot(getCurrentTimeSlot());
@@ -44,82 +155,146 @@ export default function PlayerPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // Rotate ads
+  // ---------- Seamless ad transition (double-buffer) ----------
   const advance = useCallback(() => {
     if (ads.length <= 1) return;
-    setFading(true);
+
+    const next = (currentIndex + 1) % ads.length;
+    setNextIndex(next);
+
+    // Start crossfade
+    setTransitioning(true);
+
     setTimeout(() => {
-      setCurrentIndex((prev) => (prev + 1) % ads.length);
-      setFading(false);
+      setCurrentIndex(next);
+      setActiveLayer((prev) => (prev === "a" ? "b" : "a"));
+      setTransitioning(false);
     }, TRANSITION_DURATION);
-  }, [ads.length]);
+  }, [ads.length, currentIndex]);
 
   useEffect(() => {
     if (ads.length === 0) return;
-    const duration = (ads[currentIndex]?.durationSeconds ?? DEFAULT_AD_DURATION) * 1000;
+    const duration =
+      (ads[currentIndex]?.durationSeconds ?? DEFAULT_AD_DURATION) * 1000;
     const timer = setTimeout(advance, duration);
     return () => clearTimeout(timer);
   }, [currentIndex, ads, advance]);
 
-  const currentAd = ads[currentIndex];
+  // ---------- Preload next video ----------
+  useEffect(() => {
+    if (ads.length <= 1) return;
+    const next = (currentIndex + 1) % ads.length;
+    const nextAd = ads[next];
+    if (nextAd?.mediaType === "video" && nextAd.mediaUrl) {
+      // Preload next video into the inactive layer
+      const inactiveRef = activeLayer === "a" ? videoRefB : videoRefA;
+      if (inactiveRef.current) {
+        inactiveRef.current.src = nextAd.mediaUrl;
+        inactiveRef.current.load();
+      }
+    }
+  }, [currentIndex, ads, activeLayer]);
 
-  // Night mode dims the display
+  const currentAd = ads[currentIndex];
+  const nextAd = ads[nextIndex] ?? ads[0];
   const bgColor = nightMode ? "bg-zinc-950" : "bg-black";
   const brightness = nightMode ? "brightness-75" : "brightness-100";
 
+  // ---------- Render ad layer ----------
+  function renderAd(ad: Ad | undefined, videoRef: React.RefObject<HTMLVideoElement | null>) {
+    if (!ad) return null;
+
+    if (ad.mediaType === "video" && ad.mediaUrl) {
+      return (
+        <video
+          ref={videoRef}
+          src={ad.mediaUrl}
+          autoPlay
+          muted
+          loop
+          playsInline
+          className="w-full h-full object-cover"
+        />
+      );
+    }
+
+    if (ad.mediaUrl) {
+      return (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={ad.mediaUrl}
+          alt={ad.title}
+          className="w-full h-full object-cover"
+        />
+      );
+    }
+
+    // Placeholder for demo ads without media
+    return (
+      <div className="flex flex-col items-center justify-center w-full h-full bg-gradient-to-br from-blue-900 via-black to-purple-900">
+        <p className="text-6xl font-bold mb-4">{ad.clientName}</p>
+        <p className="text-3xl text-zinc-300">{ad.title}</p>
+        {ad.priority === "premium" && (
+          <span className="mt-6 px-4 py-1 bg-amber-500 text-black rounded-full text-sm font-semibold">
+            PREMIUM
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  // ---------- Empty state ----------
   if (ads.length === 0) {
     return (
-      <div className={`flex items-center justify-center min-h-screen ${bgColor} text-white`}>
+      <div
+        className={`flex items-center justify-center min-h-screen ${bgColor} text-white select-none`}
+      >
         <div className="text-center space-y-4">
           <h1 className="text-5xl font-bold">{SITE_NAME}</h1>
-          <p className="text-xl text-zinc-500">No ads scheduled for this time slot</p>
+          <p className="text-xl text-zinc-500">
+            No ads scheduled for this time slot
+          </p>
           <p className="text-zinc-600">{clock}</p>
+          {!online && (
+            <p className="text-amber-500 text-sm animate-pulse">
+              Offline — waiting for connection
+            </p>
+          )}
         </div>
       </div>
     );
   }
 
+  // ---------- Main player (double-buffered layers) ----------
   return (
-    <div className={`relative min-h-screen ${bgColor} text-white overflow-hidden ${brightness}`}>
-      {/* Full-screen ad display */}
+    <div
+      className={`relative min-h-screen ${bgColor} text-white overflow-hidden ${brightness} select-none`}
+    >
+      {/* Layer A */}
       <div
-        className={`absolute inset-0 flex items-center justify-center transition-opacity duration-1000 ${
-          fading ? "opacity-0" : "opacity-100"
-        }`}
+        className="absolute inset-0 flex items-center justify-center transition-opacity duration-1000"
+        style={{
+          opacity: activeLayer === "a" ? 1 : transitioning ? 0 : 0,
+          zIndex: activeLayer === "a" ? 2 : 1,
+        }}
       >
-        {currentAd?.mediaType === "video" && currentAd.mediaUrl ? (
-          <video
-            src={currentAd.mediaUrl}
-            autoPlay
-            muted
-            loop
-            playsInline
-            className="w-full h-full object-cover"
-          />
-        ) : currentAd?.mediaUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={currentAd.mediaUrl}
-            alt={currentAd.title}
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          /* Demo placeholder when no media URL */
-          <div className="flex flex-col items-center justify-center w-full h-full bg-gradient-to-br from-blue-900 via-black to-purple-900">
-            <p className="text-6xl font-bold mb-4">{currentAd?.clientName}</p>
-            <p className="text-3xl text-zinc-300">{currentAd?.title}</p>
-            {currentAd?.priority === "premium" && (
-              <span className="mt-6 px-4 py-1 bg-amber-500 text-black rounded-full text-sm font-semibold">
-                PREMIUM
-              </span>
-            )}
-          </div>
-        )}
+        {renderAd(activeLayer === "a" ? currentAd : nextAd, videoRefA)}
+      </div>
+
+      {/* Layer B */}
+      <div
+        className="absolute inset-0 flex items-center justify-center transition-opacity duration-1000"
+        style={{
+          opacity: activeLayer === "b" ? 1 : transitioning ? 0 : 0,
+          zIndex: activeLayer === "b" ? 2 : 1,
+        }}
+      >
+        {renderAd(activeLayer === "b" ? currentAd : nextAd, videoRefB)}
       </div>
 
       {/* QR Code overlay */}
       {currentAd?.qrCodeUrl && (
-        <div className="absolute bottom-8 right-8 bg-white p-3 rounded-xl shadow-2xl">
+        <div className="absolute bottom-8 right-8 bg-white p-3 rounded-xl shadow-2xl z-10">
           <div className="w-24 h-24 bg-zinc-200 flex items-center justify-center text-zinc-500 text-xs">
             QR
           </div>
@@ -128,12 +303,10 @@ export default function PlayerPage() {
       )}
 
       {/* Bottom info bar */}
-      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6">
+      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6 z-10">
         <div className="flex items-end justify-between">
           <div>
-            <p className="text-sm text-zinc-400">
-              {timeSlot?.label ?? ""}
-            </p>
+            <p className="text-sm text-zinc-400">{timeSlot?.label ?? ""}</p>
             <p className="text-xs text-zinc-500 mt-1">
               Ad {currentIndex + 1} of {ads.length}
               {nightMode && " • Night Mode"}
@@ -146,12 +319,22 @@ export default function PlayerPage() {
         </div>
       </div>
 
+      {/* Offline indicator */}
+      {!online && (
+        <div className="absolute top-4 left-4 px-3 py-1 bg-amber-600 rounded text-xs font-semibold animate-pulse z-10">
+          OFFLINE
+        </div>
+      )}
+
       {/* Progress bar */}
-      <div className="absolute top-0 left-0 right-0 h-1 bg-zinc-800">
+      <div className="absolute top-0 left-0 right-0 h-1 bg-zinc-800 z-10">
         <div
-          className="h-full bg-blue-500 transition-all ease-linear"
+          key={currentIndex}
+          className="h-full bg-blue-500"
           style={{
-            animation: `progress ${currentAd?.durationSeconds ?? DEFAULT_AD_DURATION}s linear forwards`,
+            animation: `progress ${
+              currentAd?.durationSeconds ?? DEFAULT_AD_DURATION
+            }s linear forwards`,
           }}
         />
       </div>
