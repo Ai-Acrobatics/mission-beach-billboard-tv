@@ -1,0 +1,20 @@
+[Unit]
+Description=Mission Beach Billboard TV — YouTube Live Stream
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=billboard
+EnvironmentFile=/etc/billboard-stream.env
+WorkingDirectory=/opt/billboard-tv
+ExecStart=/opt/billboard-tv/scripts/stream-to-youtube.sh
+Restart=on-failure
+RestartSec=30
+
+# Resource limits
+MemoryMax=2G
+CPUQuota=80%
+
+[Install]
+WantedBy=multi-user.target
